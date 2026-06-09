@@ -5,15 +5,26 @@ public class RoundManager : MonoBehaviour
 {
     [Header("Match Settings")]
     public int scoreToWin = 10;
-    public float minSpawnDistance = 50f; // Requirement: Items must spawn far apart
+    public float minSpawnDistance = 50f;
 
-    [Header("Assets (Reference via Inspector)")]
-    public string[] letters = { "Alif", "Baa", "Taa", "Thaa" }; // Existing asset names
-    public string[] harakat = { "Fatha", "Damma", "Kasra" };
+    [Header("Arabic Font Text Arrays")]
+    // All 28 standard Arabic letters linked natively to match your imported font theme
+    public string[] letters = { 
+        "أ", "ب", "ت", "ث", "ج", "ح", "خ", "د", "ذ", "ر", "ز", "س", "ش", "ص", 
+        "ض", "ط", "ظ", "ع", "غ", "ف", "ق", "ك", "ل", "م", "ن", "هـ", "و", "ي" 
+    }; 
+    
+    // Core diacritics using native escape sequences for clean stack layout rendering
+    public string[] harakat = { 
+        "\u064E", // Fatha ( َ )
+        "\u064F", // Damma ( ُ )
+        "\u0650"  // Kasra ( ِ )
+    };
 
     [Header("Current Round State")]
     public string currentLetter;
     public string currentHarakah;
+    public string currentCombinedSyllable;
     
     private int player1Score = 0;
     private int player2Score = 0;
@@ -25,47 +36,40 @@ public class RoundManager : MonoBehaviour
 
     public void StartNewRound()
     {
-        // 1. Randomize Letter and Harakah (No sequential order)
+        // Randomly pick a letter and a harakah (No sequential order constraint)
         currentLetter = letters[Random.Range(0, letters.Length)];
         currentHarakah = harakat[Random.Range(0, harakat.Length)];
-
-        Debug.Log($"[Match Announcement] New Round: Collect {currentLetter} + {currentHarakah}");
         
+        // Fuses the selected vowel marker directly over/under the chosen base letter character
+        currentCombinedSyllable = currentLetter + currentHarakah;
+
+        Debug.Log($"[Match Setup] New Target Assembled: {currentCombinedSyllable}");
         SpawnItems();
     }
 
     private void SpawnItems()
     {
-        // 2. Spawn logic with Minimum Separation Requirement
         Vector2 letterPos = Random.insideUnitCircle * 100f;
         Vector2 harakahPos;
 
-        // Ensure Harakah is far enough from Letter
+        // Requirement: Maintain minimum spacing boundary so things never cluster at spawn
         do {
             harakahPos = Random.insideUnitCircle * 100f;
         } while (Vector2.Distance(letterPos, harakahPos) < minSpawnDistance);
 
-        // Place items in the 360 world
-        Debug.Log($"[Spawn] {currentLetter} spawned at {letterPos}. {currentHarakah} spawned at {harakahPos}.");
+        Debug.Log($"[Spawned] Target letter '{currentLetter}' and marker '{currentHarakah}' placed dynamically in space.");
     }
 
-    // Called by the PlaneHeistController when it delivers to a portal
     public void OnSyllableDelivered(string playerName)
     {
-        Debug.Log($"[Voice Announcement] {playerName} delivered {currentLetter} {currentHarakah}!");
+        Debug.Log($"[Voice Announcement Bridge] {playerName} successfully delivered: {currentCombinedSyllable}!");
         
-        // Update Score
         if (playerName == "Ahmed") player1Score++;
         else player2Score++;
 
-        CheckVictory();
-    }
-
-    private void CheckVictory()
-    {
         if (player1Score >= scoreToWin || player2Score >= scoreToWin)
         {
-            Debug.Log("[Victory] Match Finished. Displaying Victory Screen.");
+            Debug.Log("[Victory Screen] Target points achieved. Match finished.");
         }
         else
         {
