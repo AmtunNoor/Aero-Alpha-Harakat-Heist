@@ -1,0 +1,32 @@
+body {
+    margin: 0;
+    overflow: hidden;
+    background-color: #1a1a1a; /* Dark background to save battery */
+    font-family: sans-serif;
+    user-select: none;
+    touch-action: none; /* Prevents browser zooming/scrolling during play */
+}
+
+#joystick-container {
+    position: absolute;
+    bottom: 10%;
+    left: 10%;
+    width: 150px;
+    height: 150px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+}
+
+#boost-button {
+    position: absolute;
+    bottom: 15%;
+    right: 10%;
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    border: none;
+    background: #ff4757;
+    color: white;
+    font-weight: bold;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
