@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Harakat Heist - Dynamic Mode Launcher</title>
+    <style>
+        body { margin: 0; background: #111; color: white; font-family: sans-serif; display: flex; height: 100vh; overflow: hidden; position: relative; }
+        
+        /* THE MAIN MENU SCREEN OVERLAY */
+        #main-menu { position: absolute; top:0; left:0; width: 100vw; height: 100vh; background: #1e272e; z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 30px; transition: opacity 0.3s ease; }
+        #main-menu h1 { font-size: 42px; color: #ffd32a; margin: 0; text-shadow: 3px 3px #000; letter-spacing: 2px; }
+        .menu-btn { width: 320px; padding: 20px; font-size: 18px; font-weight: bold; background: #3498db; color: white; border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 6px #2980b9; transition: all 0.1s ease; }
+        .menu-btn:active { transform: translateY(4px); box-shadow: 0 2px #2980b9; }
+        .menu-btn.secondary { background: #2ed573; box-shadow: 0 6px #27ae60; }
+        
+        /* THE LOBBY QR CONNECTION WAITING ROOM */
+        #lobby-screen { position: absolute; top:0; left:0; width: 100vw; height: 100vh; background: rgba(30, 39, 46, 0.95); z-index: 90; display: none; flex-direction: column; justify-content: center; align-items: center; gap: 20px; }
+        #qr-container { width: 220px; height: 220px; background: white; border-radius: 12px; display: flex; justify-content: center; align-items: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        .qr-placeholder { width: 190px; height: 190px; background: repeating-conic-gradient(#000 0% 25%, #fff 0% 50%) 0 0/20px 20px; border: 4px solid #000; }
+        #connection-status { font-size: 18px; color: #aaa; font-weight: bold; }
+
+        /* GAME LAYOUT */
+        #tv-screen { flex: 2; background: #1e272e; position: relative; border-right: 4px solid #333; box-sizing: border-box; }
+        #controller-panel { flex: 1; background: #2f3542; display: flex; flex-direction: column; padding: 10px; gap: 10px; box-sizing: border-box; }
+        .virtual-phone { flex: 1; background: #1e1e24; border: 3px solid #ff4757; border-radius: 12px; display: flex; flex-direction: column; justify-content: space-around; align-items: center; padding: 10px; position: relative; }
+        .phone-label { position: absolute; top: 5px; left: 10px; color: #aaa; font-size: 12px; font-weight: bold; }
+        .btn-dir { width: 50px; height: 50px; background: #57606f; border: none; color: white; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .btn-dir:active { background: #ff4757; }
+        .d-pad { display: grid; grid-template-columns: repeat(3, 50px); grid-template-rows: repeat(3, 50px); gap: 5px; }
+        #scoreboard { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 8px; font-size: 16px; z-index: 10; display: none; }
+        #announcer { position: absolute; bottom: 20px; width: 100%; text-align: center; font-size: 20px; font-weight: bold; color: #ffd32a; text-shadow: 2px 2px #000; z-index: 10; display: none; }
+        canvas { width: 100%; height: 100%; position: absolute; top:0; left:0; }
+    </style>
+</head>
+<body>
+
+    <div id="main-menu">
+        <h1>AERO ALPHA: HARAKAT HEIST</h1>
+        <button class="menu-btn" onclick="selectMode('single')">1 PLAYER VS COMPUTER</button>
+        <button class="menu-btn secondary" onclick="selectMode('multi')">2 PLAYERS (LOCAL WI-FI)</button>
+    </div>
+
+    <div id="lobby-screen">
+        <h2 style="color: #ffd32a; margin: 0;">MULTIPLAYER SETUP</h2>
+        <p style="margin: 0; text-align: center; max-width: 400px; color: #ddd;">Scan this code with BOTH phones to open your mobile gamepads and join the flight arena:</p>
+        <div id="qr-container">
+            <div class="qr-placeholder"></div>
+        </div>
+        <div id="connection-status">Waiting for controllers (0/2 connected)...</div>
+        <button class="menu-btn" style="width:180px; padding:10px; font-size:14px; background:#e74c3c; box-shadow:0 4px #c0392b;" onclick="cancelLobby()">BACK TO MENU</button>
+    </div>
+
+    <div id="tv-screen">
+        <div id="scoreboard">
+            Ahmed (Green): <span id="score-p1">0</span> | Target: <span id="target-match">بَ</span><br>
+            Opponent (Purple): <span id="score-p2">0</span> <span id="opponent-type"></span>
+        </div>
+        <div id="announcer">CHASE AND COLLECT THE TARGET SYLLABLE!</div>
+        <canvas id="skyCanvas"></canvas>
+    </div>
+
+    <div id="controller-panel">
+        <div class="virtual-phone" style="border-color: #2ed573;">
+            <div class="phone-label">AHMED'S CONTROLLER INPUT BUFFER</div>
+            <div class="d-pad">
+                <div></div><button class="btn-dir" onmousedown="movePlayer('p1',0,-5)" onmouseup="movePlayer('p1',0,0)">▲</button><div></div>
+                <button class="btn-dir" onmousedown="movePlayer('p1',-5,0)" onmouseup="movePlayer('p1',0,0)">◀</button><div></div><button class="btn-dir" onmousedown="movePlayer('p1',5,0)" onmouseup="movePlayer('p1',0,0)">▶</button>
+                <div></div><button class="btn-dir" onmousedown="movePlayer('p1',0,5)" onmouseup="movePlayer('p1',0,0)">▼</button><div></div>
+            </div>
+        </div>
+        
+        <div id="p2-panel-mask" class="virtual-phone" style="border-color: #9b59b6;">
+            <div id="p2-label-text" class="phone-label">FATIMAH'S CONTROLLER INPUT BUFFER</div>
+            <div class="d-pad">
+                <div></div><button class="btn-dir" onmousedown="movePlayer('p2',0,-5)" onmouseup="movePlayer('p2',0,0)">▲</button><div></div>
+                <button class="btn-dir" onmousedown="movePlayer('p2',-5,0)" onmouseup="movePlayer('p2',0,0)">◀</button><div></div><button class="btn-dir" onmousedown="movePlayer('p2',5,0)" onmouseup="movePlayer('p2',0,0)">▶</button>
+                <div></div><button class="btn-dir" onmousedown="movePlayer('p2',0,5)" onmouseup="movePlayer('p2',0,0)">▼</button><div></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('skyCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        function resize() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+        window.onresize = resize;
+        resize();
+
+        const letters = ["أ", "ب", "ت", "ث", "ج", "ح", "خ", "د", "ذ", "ر", "ز", "س", "ش", "ص", "ض", "ط", "ظ", "ع", "غ", "ف", "ق", "ك", "ل", "م", "ن", "هـ", "و", "ي"];
+        const harakat = ["\u064E", "\u064F", "\u0650"]; 
+        let currentLetter = "ب";
+        let currentHarakah = "\u064E";
+        
+        let gameActive = false;
+        let aiModeActive = false;
+        
+        let p1 = { x: 100, y: 200, vx: 0, vy: 0, color: '#2ed573', score: 0, name: 'Ahmed', item: null };
+        let p2 = { x: 500, y: 200, vx: 0, vy: 0, color: '#9b59b6', score: 0, name: 'Opponent', item: null };
+        
+        let targetLetterObj = { x: 150, y: 100, active: true };
+        let targetHarakahObj = { x: 400, y: 300, active: true };
+        let deliveryPortal = { x: 300, y: 80, radius: 30 };
+
+        // CORE LOBBY GATEKEEPER ROUTING LOGIC
+        function selectMode(mode) {
+            document.getElementById('main-menu').style.display = 'none';
+            
+            if (mode === 'single') {
+                // Scenario A: VS Computer. Skip QR entirely and boot game space directly.
+                aiModeActive = true;
+                p2.name = "Computer AI";
+                document.getElementById('opponent-type').innerText = "(AI Pilot)";
+                document.getElementById('p2-label-text').innerText = "SYSTEM PROCESS: RUNNING BACKGROUND AI SUBROUTINES";
+                document.getElementById('p2-panel-mask').style.opacity = "0.4";
+                document.getElementById('p2-panel-mask').style.pointerEvents = "none";
+                launchGameLoop();
+            } else {
+                // Scenario B: Real Hardware Multiplayer. Halt and display connection QR code.
+                aiModeActive = false;
+                p2.name = "Fatimah";
+                document.getElementById('opponent-type').innerText = "(Player 2)";
+                document.getElementById('p2-label-text').innerText = "FATIMAH'S INCOMING PHONE SIGNAL BUFFER";
+                document.getElementById('p2-panel-mask').style.opacity = "1";
+                document.getElementById('p2-panel-mask').style.pointerEvents = "auto";
+                
+                document.getElementById('lobby-screen').style.display = 'flex';
+                
+                // Emulate physical devices scanning and connecting after 2.5 seconds
+                setTimeout(() => {
+                    document.getElementById('connection-status').innerText = "Devices detected! Initializing pipeline (2/2)...";
+                    setTimeout(() => {
+                        document.getElementById('lobby-screen').style.display = 'none';
+                        launchGameLoop();
+                    }, 1200);
+                }, 2500);
+            }
+        }
+
+        function cancelLobby() {
+            document.getElementById('lobby-screen').style.display = 'none';
+            document.getElementById('main-menu').style.display = 'flex';
+        }
+
+        function launchGameLoop() {
+            gameActive = true;
+            document.getElementById('scoreboard').style.display = 'block';
+            document.getElementById('announcer').style.display = 'block';
+            triggerNewRound();
+        }
+
+        function movePlayer(player, x, y) {
+            if(!gameActive) return;
+            if(player === 'p2' && aiModeActive) return; 
+            let target = (player === 'p1') ? p1 : p2;
+            target.vx = x;
+            target.vy = y;
+        }
+
+        function triggerNewRound() {
+            if(!gameActive) return;
+            currentLetter = letters[Math.floor(Math.random() * letters.length)];
+            currentHarakah = harakat[Math.floor(Math.random() * harakat.length)];
+            document.getElementById('target-match').innerText = currentLetter + currentHarakah;
+            
+            targetLetterObj.x = Math.random() * (canvas.width - 200) + 100;
+            targetLetterObj.y = Math.random() * (canvas.height - 200) + 100;
+            
+            do {
+                targetHarakahObj.x = Math.random() * (canvas.width - 200) + 100;
+                targetHarakahObj.y = Math.random() * (canvas.height - 200) + 100;
+            } while (Math.hypot(targetLetterObj.x - targetHarakahObj.x, targetLetterObj.y - targetHarakahObj.y) < 150);
+            
+            deliveryPortal.x = Math.random() * (canvas.width - 100) + 50;
+            
+            targetLetterObj.active = true;
+            targetHarakahObj.active = true;
+            p1.item = null; p2.item = null;
+        }
+
+        function checkCollision(obj1, obj2, dist) {
+            return Math.hypot(obj1.x - obj2.x, obj1.y - obj2.y) < dist;
+        }
+
+        function updateGame() {
+            requestAnimationFrame(updateGame);
+            if(!gameActive) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Infinite grid lines
+            ctx.strokeStyle = '#2c3e50'; ctx.lineWidth = 1;
+            for(let i=0; i<canvas.width; i+=40) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke(); }
+            for(let j=0; j<canvas.height; j+=40) { ctx.beginPath(); ctx.moveTo(0,j); ctx.lineTo(canvas.width,j); ctx.stroke(); }
+
+            // Goal zone portal
+            ctx.fillStyle = "rgba(52, 152, 219, 0.4)"; ctx.strokeStyle = "#3498db"; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.arc(deliveryPortal.x, deliveryPortal.y, deliveryPortal.radius, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+            // Computer processing steering calculations
+            if(aiModeActive) {
+                let tx = p2.x, ty = p2.y;
+                if (!p2.item) {
+                    if (targetLetterObj.active) { tx = targetLetterObj.x; ty = targetLetterObj.y; }
+                    else if (targetHarakahObj.active) { tx = targetHarakahObj.x; ty = targetHarakahObj.y; }
+                } else {
+                    tx = deliveryPortal.x; ty = deliveryPortal.y;
+                }
+                let angle = Math.atan2(ty - p2.y, tx - p2.x);
+                p2.vx = Math.cos(angle) * 3.5;
+                p2.vy = Math.sin(angle) * 3.5;
+            }
+
+            p1.x += p1.vx; p1.y += p1.vy;
+            p2.x += p2.vx; p2.y += p2.vy;
+
+            // Boundaries looping protection wrap
+            if(p1.x < 0) p1.x = canvas.width; else if(p1.x > canvas.width) p1.x = 0;
+            if(p1.y < 0) p1.y = canvas.height; else if(p1.y > canvas.height) p1.y = 0;
+            if(p2.x < 0) p2.x = canvas.width; else if(p2.x > canvas.width) p2.x = 0;
+            if(p2.y < 0) p2.y = canvas.height; else if(p2.y > canvas.height) p2.y = 0;
+
+            // Native Font characters array rendering
+            ctx.font = "36px sans-serif"; ctx.fillStyle = "#f1c40f";
+            if (targetLetterObj.active) ctx.fillText(currentLetter, targetLetterObj.x - 15, targetLetterObj.y + 15);
+            if (targetHarakahObj.active) ctx.fillText(currentHarakah, targetHarakahObj.x - 10, targetHarakahObj.y + 10);
+
+            // Plane circles draw
+            ctx.fillStyle = p1.color; ctx.beginPath(); ctx.arc(p1.x, p1.y, 16, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = p2.color; ctx.beginPath(); ctx.arc(p2.x, p2.y, 16, 0, Math.PI*2); ctx.fill();
+
+            // Cargo rendering text overlays
+            ctx.font = "12px sans-serif"; ctx.fillStyle = "#fff";
+            if(p1.item) ctx.fillText(p1.item === 'letter' ? currentLetter : currentHarakah, p1.x - 6, p1.y - 22);
+            if(p2.item) ctx.fillText(p2.item === 'letter' ? currentLetter : currentHarakah, p2.x - 6, p2.y - 22);
+
+            // Capture Processing
+            if(targetLetterObj.active && checkCollision(p1, targetLetterObj, 25)) { targetLetterObj.active = false; p1.item = 'letter'; document.getElementById('announcer').innerText = "Ahmed caught the Arabic Letter!"; }
+            if(targetLetterObj.active && checkCollision(p2, targetLetterObj, 25)) { targetLetterObj.active = false; p2.item = 'letter'; document.getElementById('announcer').innerText = `${p2.name} caught the Arabic Letter!`; }
+            if(targetHarakahObj.active && checkCollision(p1, targetHarakahObj, 25)) { targetHarakahObj.active = false; p1.item = 'harakah'; document.getElementById('announcer').innerText = "Ahmed caught the Harakah!"; }
+            if(targetHarakahObj.active && checkCollision(p2, targetHarakahObj, 25)) { targetHarakahObj.active = false; p2.item = 'harakah'; document.getElementById('announcer').innerText = `${p2.name} caught the Harakah!`; }
+
+            // Interception Matrix
+            if(checkCollision(p1, p2, 32)) {
+                if(p1.item || p2.item) {
+                    let swap = p1.item; p1.item = p2.item; p2.item = swap;
+                    document.getElementById('announcer').innerText = "🚨 MID-AIR HEIST! Items intercepted!";
+                    p1.x -= p1.vx * 4; p1.y -= p1.vy * 4; p2.x -= p2.vx * 4; p2.y -= p2.vy * 4;
+                }
+            }
+
+            // Scoring Assessment
+            if(p1.item && checkCollision(p1, deliveryPortal, deliveryPortal.radius)) { p1.score++; document.getElementById('score-p1').innerText = p1.score; document.getElementById('announcer').innerText = "Success! Ahmed delivered the syllable!"; triggerNewRound(); }
+            if(p2.item && checkCollision(p2, deliveryPortal, deliveryPortal.radius)) { p2.score++; document.getElementById('score-p2').innerText = p2.score; document.getElementById('announcer').innerText = `Success! ${p2.name} delivered the syllable!`; triggerNewRound(); }
+        }
+
+        updateGame();
+    </script>
+</body>
+</html>
